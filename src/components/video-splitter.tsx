@@ -28,7 +28,6 @@ type Status = "idle" | "loading" | "splitting" | "success" | "error";
 export function VideoSplitter() {
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [duration, setDuration] = useState("00:05:00");
-  const [suffix, setSuffix] = useState("");
   const [outputDir, setOutputDir] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [progress, setProgress] = useState<SplitProgress>({
@@ -119,7 +118,7 @@ export function VideoSplitter() {
           inputPath: video.path,
           outputDir,
           prefix,
-          suffix,
+          suffix: "",
           durationSeconds,
         });
 
@@ -137,12 +136,11 @@ export function VideoSplitter() {
       setError(String(err));
       setStatus("error");
     }
-  }, [videos, duration, suffix, outputDir]);
+  }, [videos, duration, outputDir]);
 
   const handleReset = useCallback(() => {
     setVideos([]);
     setDuration("00:05:00");
-    setSuffix("");
     setOutputDir("");
     setStatus("idle");
     setProgress({ currentFile: 0, totalFiles: 0, totalClipsCreated: 0, percentage: 0 });
@@ -190,9 +188,7 @@ export function VideoSplitter() {
             />
             <div className="border-t pt-6">
               <OutputConfig
-                suffix={suffix}
                 outputDir={outputDir}
-                onSuffixChange={setSuffix}
                 onOutputDirChange={setOutputDir}
                 disabled={isProcessing}
               />

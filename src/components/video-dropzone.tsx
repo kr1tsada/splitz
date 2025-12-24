@@ -38,7 +38,7 @@ export function VideoDropzone({
 
       if (selected && Array.isArray(selected) && selected.length > 0) {
         const newVideos: VideoFile[] = selected.map((path) => {
-          const name = path.split("/").pop() || path.split("\\").pop() || "video";
+          const name = (path.split("/").pop() || path.split("\\").pop() || "video").replace(/:/g, "/");
           return {
             path,
             name,

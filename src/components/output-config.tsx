@@ -6,17 +6,13 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 interface OutputConfigProps {
-  suffix: string;
   outputDir: string;
-  onSuffixChange: (suffix: string) => void;
   onOutputDirChange: (dir: string) => void;
   disabled?: boolean;
 }
 
 export function OutputConfig({
-  suffix,
   outputDir,
-  onSuffixChange,
   onOutputDirChange,
   disabled,
 }: OutputConfigProps) {
@@ -37,21 +33,6 @@ export function OutputConfig({
 
   return (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="suffix">Suffix (optional)</Label>
-        <Input
-          id="suffix"
-          type="text"
-          placeholder=""
-          value={suffix}
-          onChange={(e) => onSuffixChange(e.target.value)}
-          disabled={disabled}
-        />
-        <p className="text-xs text-muted-foreground">
-          Each video will use its filename as prefix: video1_001{suffix}.mp4
-        </p>
-      </div>
-
       <div className="space-y-2">
         <Label htmlFor="outputDir">Output Folder</Label>
         <div className="flex gap-2">
