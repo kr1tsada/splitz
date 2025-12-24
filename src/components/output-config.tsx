@@ -6,20 +6,16 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
 interface OutputConfigProps {
-  prefix: string;
   suffix: string;
   outputDir: string;
-  onPrefixChange: (prefix: string) => void;
   onSuffixChange: (suffix: string) => void;
   onOutputDirChange: (dir: string) => void;
   disabled?: boolean;
 }
 
 export function OutputConfig({
-  prefix,
   suffix,
   outputDir,
-  onPrefixChange,
   onSuffixChange,
   onOutputDirChange,
   disabled,
@@ -39,39 +35,21 @@ export function OutputConfig({
     }
   }, [onOutputDirChange]);
 
-  // Generate preview filenames
-  const generatePreview = () => {
-    const examples = [1, 2, 3];
-    return examples
-      .map((i) => `${prefix}${String(i).padStart(3, "0")}${suffix}.mp4`)
-      .join(", ");
-  };
-
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="prefix">Prefix</Label>
-          <Input
-            id="prefix"
-            type="text"
-            placeholder="video_"
-            value={prefix}
-            onChange={(e) => onPrefixChange(e.target.value)}
-            disabled={disabled}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="suffix">Suffix</Label>
-          <Input
-            id="suffix"
-            type="text"
-            placeholder=""
-            value={suffix}
-            onChange={(e) => onSuffixChange(e.target.value)}
-            disabled={disabled}
-          />
-        </div>
+      <div className="space-y-2">
+        <Label htmlFor="suffix">Suffix (optional)</Label>
+        <Input
+          id="suffix"
+          type="text"
+          placeholder=""
+          value={suffix}
+          onChange={(e) => onSuffixChange(e.target.value)}
+          disabled={disabled}
+        />
+        <p className="text-xs text-muted-foreground">
+          Each video will use its filename as prefix: video1_001{suffix}.mp4
+        </p>
       </div>
 
       <div className="space-y-2">
@@ -97,13 +75,6 @@ export function OutputConfig({
           </Button>
         </div>
       </div>
-
-      {prefix && (
-        <div className="rounded-md bg-muted/50 p-3">
-          <p className="text-xs text-muted-foreground mb-1">Preview:</p>
-          <p className="text-sm font-mono truncate">{generatePreview()}</p>
-        </div>
-      )}
     </div>
   );
 }

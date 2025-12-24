@@ -17,63 +17,79 @@ interface VideoFile {
 }
 
 interface SplitProgress {
-  currentClip: number;
-  totalClips: number;
+  currentFile: number;
+  totalFiles: number;
+  totalClipsCreated: number;
   percentage: number;
 }
 
 type Status = "idle" | "loading" | "splitting" | "success" | "error";
 
 export function VideoSplitter() {
-  const [video, setVideo] = useState<VideoFile | null>(null);
+  const [videos, setVideos] = useState<VideoFile[]>([]);
   const [duration, setDuration] = useState("00:05:00");
-  const [prefix, setPrefix] = useState("");
   const [suffix, setSuffix] = useState("");
   const [outputDir, setOutputDir] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [progress, setProgress] = useState<SplitProgress>({
-    currentClip: 0,
-    totalClips: 0,
+    currentFile: 0,
+    totalFiles: 0,
+    totalClipsCreated: 0,
     percentage: 0,
   });
   const [error, setError] = useState<string | null>(null);
 
-  // Get video info when file is selected
+  // Get video info when files are selected
   useEffect(() => {
-    if (video && video.duration === 0) {
-      setStatus("loading");
-      invoke<{ duration: number; size: number }>("get_video_info", {
-        path: video.path,
-      })
-        .then((info) => {
-          setVideo((prev) =>
-            prev ? { ...prev, duration: info.duration, size: info.size } : null
-          );
-          // Set default prefix from filename (without extension)
-          const nameWithoutExt = video.name.replace(/\.[^/.]+$/, "");
-          setPrefix(nameWithoutExt + "_");
-          // Set default output dir to same folder as video
-          const dir = video.path.substring(0, video.path.lastIndexOf("/"));
-          setOutputDir(dir || video.path.substring(0, video.path.lastIndexOf("\\")));
-          setStatus("idle");
-        })
-        .catch((err) => {
-          console.error("Failed to get video info:", err);
-          setError("Failed to get video information. Is FFmpeg installed?");
-          setStatus("error");
-        });
-    }
-  }, [video]);
+    const videosNeedingInfo = videos.filter((v) => v.duration === 0);
+    if (videosNeedingInfo.length === 0) return;
 
-  const handleVideoSelect = useCallback((selectedVideo: VideoFile | null) => {
-    setVideo(selectedVideo);
+    setStatus("loading");
+
+    const fetchVideoInfo = async () => {
+      try {
+        for (const video of videosNeedingInfo) {
+          const info = await invoke<{ duration: number; size: number }>("get_video_info", {
+            path: video.path,
+          });
+          setVideos((prev) =>
+            prev.map((v) =>
+              v.path === video.path
+                ? { ...v, duration: info.duration, size: info.size }
+                : v
+            )
+          );
+        }
+        // Set default output dir from first video if not set
+        if (!outputDir && videos.length > 0) {
+          const firstVideo = videos[0];
+          const dir = firstVideo.path.substring(0, firstVideo.path.lastIndexOf("/"));
+          setOutputDir(dir || firstVideo.path.substring(0, firstVideo.path.lastIndexOf("\\")));
+        }
+        setStatus("idle");
+      } catch (err) {
+        console.error("Failed to get video info:", err);
+        setError("Failed to get video information. Is FFmpeg installed?");
+        setStatus("error");
+      }
+    };
+
+    fetchVideoInfo();
+  }, [videos, outputDir]);
+
+  const handleVideoSelect = useCallback((selectedVideos: VideoFile[]) => {
+    setVideos(selectedVideos);
     setError(null);
     setStatus("idle");
-    setProgress({ currentClip: 0, totalClips: 0, percentage: 0 });
+    setProgress({ currentFile: 0, totalFiles: 0, totalClipsCreated: 0, percentage: 0 });
+  }, []);
+
+  const handleRemoveVideo = useCallback((index: number) => {
+    setVideos((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
   const handleSplit = useCallback(async () => {
-    if (!video || !outputDir) return;
+    if (videos.length === 0 || !outputDir) return;
 
     const durationSeconds = parseTimeToSeconds(duration);
     if (durationSeconds <= 0) {
@@ -83,42 +99,59 @@ export function VideoSplitter() {
 
     setStatus("splitting");
     setError(null);
+    setProgress({ currentFile: 0, totalFiles: videos.length, totalClipsCreated: 0, percentage: 0 });
 
-    const totalClips = Math.ceil(video.duration / durationSeconds);
-    setProgress({ currentClip: 0, totalClips, percentage: 0 });
+    let totalClipsCreated = 0;
 
     try {
-      await invoke("split_video", {
-        inputPath: video.path,
-        outputDir,
-        prefix,
-        suffix,
-        durationSeconds,
-      });
+      for (let i = 0; i < videos.length; i++) {
+        const video = videos[i];
+        // Use filename (without extension) as prefix
+        const prefix = video.name.replace(/\.[^/.]+$/, "") + "_";
+
+        setProgress((prev) => ({
+          ...prev,
+          currentFile: i + 1,
+          percentage: Math.round((i / videos.length) * 100),
+        }));
+
+        const clipsCreated = await invoke<number>("split_video", {
+          inputPath: video.path,
+          outputDir,
+          prefix,
+          suffix,
+          durationSeconds,
+        });
+
+        totalClipsCreated += clipsCreated;
+        setProgress((prev) => ({
+          ...prev,
+          totalClipsCreated,
+        }));
+      }
 
       setStatus("success");
-      setProgress((prev) => ({ ...prev, percentage: 100 }));
+      setProgress((prev) => ({ ...prev, percentage: 100, totalClipsCreated }));
     } catch (err) {
       console.error("Split failed:", err);
       setError(String(err));
       setStatus("error");
     }
-  }, [video, duration, prefix, suffix, outputDir]);
+  }, [videos, duration, suffix, outputDir]);
 
   const handleReset = useCallback(() => {
-    setVideo(null);
+    setVideos([]);
     setDuration("00:05:00");
-    setPrefix("");
     setSuffix("");
     setOutputDir("");
     setStatus("idle");
-    setProgress({ currentClip: 0, totalClips: 0, percentage: 0 });
+    setProgress({ currentFile: 0, totalFiles: 0, totalClipsCreated: 0, percentage: 0 });
     setError(null);
   }, []);
 
+  const allVideosHaveInfo = videos.length > 0 && videos.every((v) => v.duration > 0);
   const isReady =
-    video &&
-    video.duration > 0 &&
+    allVideosHaveInfo &&
     outputDir &&
     parseTimeToSeconds(duration) > 0;
   const isProcessing = status === "loading" || status === "splitting";
@@ -128,19 +161,22 @@ export function VideoSplitter() {
       {/* Video Selection */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Select Video</CardTitle>
+          <CardTitle className="text-lg">
+            Select Videos {videos.length > 0 && `(${videos.length})`}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <VideoDropzone
-            video={video}
+            videos={videos}
             onVideoSelect={handleVideoSelect}
+            onRemoveVideo={handleRemoveVideo}
             isLoading={isProcessing}
           />
         </CardContent>
       </Card>
 
       {/* Configuration */}
-      {video && video.duration > 0 && (
+      {allVideosHaveInfo && (
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Split Configuration</CardTitle>
@@ -149,15 +185,13 @@ export function VideoSplitter() {
             <SplitConfig
               duration={duration}
               onDurationChange={setDuration}
-              videoDuration={video.duration}
+              videoDuration={Math.max(...videos.map((v) => v.duration))}
               disabled={isProcessing}
             />
             <div className="border-t pt-6">
               <OutputConfig
-                prefix={prefix}
                 suffix={suffix}
                 outputDir={outputDir}
-                onPrefixChange={setPrefix}
                 onSuffixChange={setSuffix}
                 onOutputDirChange={setOutputDir}
                 disabled={isProcessing}
@@ -175,11 +209,15 @@ export function VideoSplitter() {
               <div className="flex items-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>
-                  Splitting... Clip {progress.currentClip} of{" "}
-                  {progress.totalClips}
+                  Splitting video {progress.currentFile} of {progress.totalFiles}...
                 </span>
               </div>
               <Progress value={progress.percentage} />
+              {progress.totalClipsCreated > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {progress.totalClipsCreated} clips created so far
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -192,7 +230,7 @@ export function VideoSplitter() {
             <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
               <CheckCircle2 className="h-5 w-5" />
               <span>
-                Split complete! {progress.totalClips} clips created in {outputDir}
+                Split complete! {progress.totalClipsCreated} clips created from {progress.totalFiles} videos
               </span>
             </div>
           </CardContent>

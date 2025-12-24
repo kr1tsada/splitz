@@ -12,20 +12,22 @@ interface VideoFile {
 }
 
 interface VideoDropzoneProps {
-  video: VideoFile | null;
-  onVideoSelect: (video: VideoFile | null) => void;
+  videos: VideoFile[];
+  onVideoSelect: (videos: VideoFile[]) => void;
+  onRemoveVideo: (index: number) => void;
   isLoading?: boolean;
 }
 
 export function VideoDropzone({
-  video,
+  videos,
   onVideoSelect,
+  onRemoveVideo,
   isLoading,
 }: VideoDropzoneProps) {
-  const handleSelectFile = useCallback(async () => {
+  const handleSelectFiles = useCallback(async () => {
     try {
       const selected = await open({
-        multiple: false,
+        multiple: true,
         filters: [
           {
             name: "Video",
@@ -34,61 +36,76 @@ export function VideoDropzone({
         ],
       });
 
-      if (selected && typeof selected === "string") {
-        // Extract filename from path
-        const name = selected.split("/").pop() || selected.split("\\").pop() || "video";
-
-        // We'll get actual size and duration from backend
-        onVideoSelect({
-          path: selected,
-          name,
-          size: 0, // Will be updated by backend
-          duration: 0, // Will be updated by backend
+      if (selected && Array.isArray(selected) && selected.length > 0) {
+        const newVideos: VideoFile[] = selected.map((path) => {
+          const name = path.split("/").pop() || path.split("\\").pop() || "video";
+          return {
+            path,
+            name,
+            size: 0,
+            duration: 0,
+          };
         });
+        onVideoSelect([...videos, ...newVideos]);
       }
     } catch (error) {
-      console.error("Error selecting file:", error);
+      console.error("Error selecting files:", error);
     }
-  }, [onVideoSelect]);
+  }, [onVideoSelect, videos]);
 
-  const handleClear = useCallback(() => {
-    onVideoSelect(null);
-  }, [onVideoSelect]);
-
-  if (video) {
+  if (videos.length > 0) {
     return (
-      <div className="relative rounded-lg border-2 border-dashed border-border p-6 transition-colors">
-        <div className="flex items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary/10">
-            <File className="h-6 w-6 text-primary" />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium truncate">{video.name}</p>
-            <p className="text-sm text-muted-foreground">
-              {video.size > 0 ? formatBytes(video.size) : "Loading info..."}
-              {video.duration > 0 && (
-                <span className="ml-2">
-                  {Math.floor(video.duration / 60)}:{String(Math.floor(video.duration % 60)).padStart(2, "0")}
-                </span>
-              )}
-            </p>
-          </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={handleClear}
-            disabled={isLoading}
-          >
-            <X className="h-4 w-4" />
-          </Button>
+      <div className="space-y-3">
+        <div className="space-y-2">
+          {videos.map((video, index) => (
+            <div
+              key={video.path}
+              className="relative rounded-lg border border-border p-4 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
+                  <File className="h-5 w-5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium truncate text-sm">{video.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {video.size > 0 ? formatBytes(video.size) : "Loading info..."}
+                    {video.duration > 0 && (
+                      <span className="ml-2">
+                        {Math.floor(video.duration / 60)}:{String(Math.floor(video.duration % 60)).padStart(2, "0")}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onRemoveVideo(index)}
+                  disabled={isLoading}
+                  className="h-8 w-8"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
         </div>
+        <Button
+          variant="outline"
+          onClick={handleSelectFiles}
+          disabled={isLoading}
+          className="w-full"
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          Add more videos
+        </Button>
       </div>
     );
   }
 
   return (
     <button
-      onClick={handleSelectFile}
+      onClick={handleSelectFiles}
       disabled={isLoading}
       className={cn(
         "w-full rounded-lg border-2 border-dashed border-border p-12 transition-colors",
@@ -102,7 +119,7 @@ export function VideoDropzone({
           <Upload className="h-7 w-7 text-primary" />
         </div>
         <div>
-          <p className="font-medium">Click to select video</p>
+          <p className="font-medium">Click to select videos</p>
           <p className="text-sm text-muted-foreground">
             MP4, MKV, AVI, MOV, WebM supported
           </p>
